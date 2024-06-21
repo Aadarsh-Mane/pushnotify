@@ -142,7 +142,7 @@ export const  getAccessToken=async()=> {
 
   try {
     const tokens = await jwtClient.authorize();
-    console.log("this  :"+tokens.access_token)
+    // console.log("this  :"+tokens.access_token)
     return tokens.access_token;
   } catch (err) {
     console.error('Error fetching access token:', err);
@@ -155,7 +155,7 @@ app.post('/send-notification', async (req, res) => {
       const accessToken = await getAccessToken();
   
       // Construct the message payload
-      console.log("sdsdsd",req.body.token);
+    //   console.log("sdsdsd",req.body.token);
 
       const message = {
         message: {
