@@ -3,12 +3,15 @@ import express from "express";
 import axios from 'axios';
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
+import cors from 'cors';
 import key from './myschoo.json' with { type: "json" };
 dotenv.config(); // Load environment variables from .env file
 
 const PORT = process.env.PORT || 5000;
 const myappToken=process.env.myappToken;
 const app = express();
+app.use(cors());
+
 app.use(express.json()); // Parse JSON-encoded bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
