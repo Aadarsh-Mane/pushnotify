@@ -237,12 +237,12 @@ admin.initializeApp({
 // // res.json({messafe:"hello"})
 // // console.log("hello")
 // // });
-// app.get('/', (req, res) => {
-//     console.log('Received GET request at /');
+app.get('/', (req, res) => {
+    console.log('Received GET request at /');
 
-//     res.json({ message: 'Server is running' });
-//   })
+    res.json({ message: 'Server is running' });
+  })
 //   // checking port on local server
-//   app.listen(PORT, () => {
-//     console.log(`listening on ${PORT}`);
-//   });
+  app.listen(PORT, () => {
+    console.log(`listening on ${PORT}`);
+  });
