@@ -3,15 +3,12 @@ import express from "express";
 import axios from 'axios';
 import admin from 'firebase-admin';
 import dotenv from 'dotenv';
-import cors from 'cors';
-import key from './myschoo.json' with { type: "json" };
 dotenv.config(); // Load environment variables from .env file
 
 const PORT = process.env.PORT || 5000;
-const myappToken=process.env.myappToken;
-const app = express();
-app.use(cors());
+import key from './myschool.json' with { type: "json" };
 
+const app = express();
 app.use(express.json()); // Parse JSON-encoded bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
 
@@ -43,103 +40,103 @@ admin.initializeApp({
 //     }
 //   });
   // Variable to store the initial length of the 'notes' collection
-let initialNotesLength = 1;
+// let initialNotesLength = 1;
 
-// Function to send notification
-const sendNotification = async (message) => {
-  try {
-    const accessToken = await getAccessToken();
+// // Function to send notification
+// const sendNotification = async (message) => {
+//   try {
+//     const accessToken = await getAccessToken();
 
-    const notification = {
-      title: 'New Note Added!',
-      body: message,
-    };
+//     const notification = {
+//       title: 'New Note Added!',
+//       body: message,
+//     };
 
-    const payload = {
-      message: {
-        token: myappToken, // Replace with actual device token or logic to fetch it
-        notification: notification,
-      },
-    };
+//     const payload = {
+//       message: {
+//         token: 'c8Sg1k04RaqdHJnMISfo0n:APA91bEz8c2p2MbsOA43S2KPWaA66yd_dz9qywYh-ApslW0uzKYZyCykjMwe1mKf8KimlDSzX_-IkKkxbf-89kATVXj5A81_IDdiGGLKVJRmd5vZLdpBaLMTpbwEd_kK5dyWvqTyhFyX', // Replace with actual device token or logic to fetch it
+//         notification: notification,
+//       },
+//     };
 
-    const response = await axios.post(
-      `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+//     const response = await axios.post(
+//       `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+//       payload,
+//       {
+//         headers: {
+//           Authorization: `Bearer ${accessToken}`,
+//           'Content-Type': 'application/json',
+//         },
+//       }
+//     );
 
-    console.log('Notification sent:', response.data);
-  } catch (error) {
-    console.error('Error sending notification:', error.response ? error.response.data : error.message);
-  }
-};
+//     console.log('Notification sent:', response.data);
+//   } catch (error) {
+//     console.error('Error sending notification:', error.response ? error.response.data : error.message);
+//   }
+// };
 
-// Monitor 'notes' collection for changes
-const startMonitoringNotesCollection = async () => {
-  try {
-    const notesRef = firestore.collection('notes');
+// // Monitor 'notes' collection for changes
+// const startMonitoringNotesCollection = async () => {
+//   try {
+//     const notesRef = firestore.collection('notes');
 
-    // Initial snapshot to get the current length
-    const initialSnapshot = await notesRef.get();
-    initialNotesLength = initialSnapshot.size;
+//     // Initial snapshot to get the current length
+//     const initialSnapshot = await notesRef.get();
+//     initialNotesLength = initialSnapshot.size;
 
-    // Watch for changes in 'notes' collection
-    notesRef.onSnapshot(snapshot => {
-      const currentLength = snapshot.size;
+//     // Watch for changes in 'notes' collection
+//     notesRef.onSnapshot(snapshot => {
+//       const currentLength = snapshot.size;
 
-      // Check if new data was added (assuming initialNotesLength = 1)
-      if (currentLength > initialNotesLength) {
-        // Get the latest added document
-        const addedDoc = snapshot.docChanges().find(change => change.type === 'added');
-        if (addedDoc) {
-          const addedData = addedDoc.doc.data();
-          const message = `New announcement added do check: ${addedData.note}`; // Customize this message based on your document structure
-          sendNotification(message);
-        }
-      }
+//       // Check if new data was added (assuming initialNotesLength = 1)
+//       if (currentLength > initialNotesLength) {
+//         // Get the latest added document
+//         const addedDoc = snapshot.docChanges().find(change => change.type === 'added');
+//         if (addedDoc) {
+//           const addedData = addedDoc.doc.data();
+//           const message = `New announcement added do check: ${addedData.note}`; // Customize this message based on your document structure
+//           sendNotification(message);
+//         }
+//       }
 
-      // Update initialNotesLength to current length for future comparisons
-      initialNotesLength = currentLength;
-    });
-  } catch (error) {
-    console.error('Error monitoring notes collection:', error);
-  }
-};
+//       // Update initialNotesLength to current length for future comparisons
+//       initialNotesLength = currentLength;
+//     });
+//   } catch (error) {
+//     console.error('Error monitoring notes collection:', error);
+//   }
+// };
 
-// Call function to start monitoring 'notes' collection
-startMonitoringNotesCollection();
+// // Call function to start monitoring 'notes' collection
+// startMonitoringNotesCollection();
 
-// Endpoint to fetch 'notes' collection length
-app.get('/notes', async (req, res) => {
-  try {
-    const notesRef = firestore.collection('notes');
-    const snapshot = await notesRef.get();
-    const notesLength = snapshot.size;
-    res.json({ notesLength: notesLength });
-  } catch (error) {
-    console.error('Error fetching notes collection:', error);
-    res.status(500).json({ error: 'Failed to fetch notes collection' });
-  }
-});
+// // Endpoint to fetch 'notes' collection length
+// app.get('/notes', async (req, res) => {
+//   try {
+//     const notesRef = firestore.collection('notes');
+//     const snapshot = await notesRef.get();
+//     const notesLength = snapshot.size;
+//     res.json({ notesLength: notesLength });
+//   } catch (error) {
+//     console.error('Error fetching notes collection:', error);
+//     res.status(500).json({ error: 'Failed to fetch notes collection' });
+//   }
+// });
 
 
 export const  getAccessToken=async()=> {
   const jwtClient = new google.auth.JWT(
-    key.client_email,
+    process.env.client_email,
     null,
-    key.private_key,
+    process.env.private_key,
     ['https://www.googleapis.com/auth/firebase.messaging'], // Scope required for FCM
     null
   );
 
   try {
     const tokens = await jwtClient.authorize();
-    // console.log("this  :"+tokens.access_token)
+    console.log("this  :"+tokens.access_token)
     return tokens.access_token;
   } catch (err) {
     console.error('Error fetching access token:', err);
@@ -152,7 +149,7 @@ app.post('/send-notification', async (req, res) => {
       const accessToken = await getAccessToken();
   
       // Construct the message payload
-    //   console.log("sdsdsd",req.body.token);
+      console.log("sdsdsd",req.body.token);
 
       const message = {
         message: {
@@ -190,7 +187,7 @@ app.post('/send-notification', async (req, res) => {
 // console.log("hello")
 // });
 app.get('/', (req, res) => {
-    // console.log('Received GET request at /');
+    console.log('Received GET request at /');
 
     res.json({ message: 'Server is running' });
   })
