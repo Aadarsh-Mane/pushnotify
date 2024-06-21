@@ -23,8 +23,7 @@ admin.initializeApp({
     // Replace with your Firebase project config
     databaseURL: 'https://myschool-44d2f.firebaseio.com/'
   });
-  const db = admin.firestore();
-
+  
   const firestore = admin.firestore();
 //   app.get('/collections', async (req, res) => {
 //     try {
@@ -47,202 +46,160 @@ admin.initializeApp({
 //     }
 //   });
   // Variable to store the initial length of the 'notes' collection
-  app.post('/register-token', async (req, res) => {
-    const { userId, fcmToken } = req.body;
-  
-    try {
-      // Save FCM token to a separate 'fcmTokens' collection in Firestore
-      await db.collection('fcmTokens').doc(userId).set({ token: fcmToken });
-  
-      res.status(200).json({ message: 'FCM token registered successfully' });
-    } catch (error) {
-      console.error('Error registering FCM token:', error);
-      res.status(500).json({ error: 'Failed to register FCM token' });
-    }
-  });
-  
-  // Endpoint to send notification to all registered devices
-  app.post('/send-notification', async (req, res) => {
-    const { title, body } = req.body;
-  
-    try {
-      // Retrieve all FCM tokens from 'fcmTokens' collection in Firestore
-      const tokensSnapshot = await db.collection('fcmTokens').get();
-      const tokens = tokensSnapshot.docs.map(doc => doc.data().token);
-  
-      // Prepare the message payload
-      const message = {
-        notification: {
-          title: title,
-          body: body
+let initialNotesLength = 1;
+
+// Function to send notification
+const sendNotification = async (message) => {
+  try {
+    const accessToken = await getAccessToken();
+
+    const notification = {
+      title: 'New announcement !',
+      body: message,
+    };
+
+    const payload = {
+      message: {
+        token: 'c8Sg1k04RaqdHJnMISfo0n:APA91bEz8c2p2MbsOA43S2KPWaA66yd_dz9qywYh-ApslW0uzKYZyCykjMwe1mKf8KimlDSzX_-IkKkxbf-89kATVXj5A81_IDdiGGLKVJRmd5vZLdpBaLMTpbwEd_kK5dyWvqTyhFyX', // Replace with actual device token or logic to fetch it
+        notification: notification,
+      },
+    };
+
+    const response = await axios.post(
+      `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+      payload,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
         },
-        tokens: tokens
+      }
+    );
+
+    // console.log('Notification sent:', response.data);
+  } catch (error) {
+    console.error('Error sending notification:', error.response ? error.response.data : error.message);
+  }
+};
+
+// Monitor 'notes' collection for changes
+const startMonitoringNotesCollection = async () => {
+  try {
+    const notesRef = firestore.collection('notes');
+
+    // Initial snapshot to get the current length
+    const initialSnapshot = await notesRef.get();
+    initialNotesLength = initialSnapshot.size;
+
+    // Watch for changes in 'notes' collection
+    notesRef.onSnapshot(snapshot => {
+      const currentLength = snapshot.size;
+
+      // Check if new data was added (assuming initialNotesLength = 1)
+      if (currentLength > initialNotesLength) {
+        // Get the latest added document
+        const addedDoc = snapshot.docChanges().find(change => change.type === 'added');
+        if (addedDoc) {
+          const addedData = addedDoc.doc.data();
+          const message = `New announcement added do check: ${addedData.note}`; // Customize this message based on your document structure
+          sendNotification(message);
+        }
+      }
+
+      // Update initialNotesLength to current length for future comparisons
+      initialNotesLength = currentLength;
+    });
+  } catch (error) {
+    res.json({ error: error})
+    // console.error('Error monitoring notes collection:', error);
+  }
+};
+
+// Call function to start monitoring 'notes' collection
+startMonitoringNotesCollection();
+
+// Endpoint to fetch 'notes' collection length
+app.get('/notes', async (req, res) => {
+  try {
+    const notesRef = firestore.collection('notes');
+    const snapshot = await notesRef.get();
+    const notesLength = snapshot.size;
+    res.json({ notesLength: notesLength });
+  } catch (error) {
+    console.error('Error fetching notes collection:', error);
+    res.status(500).json({ error: 'Failed to fetch notes collection' });
+  }
+});
+
+
+export const  getAccessToken=async()=> {
+  const jwtClient = new google.auth.JWT(
+    process.env.client_email,
+    null,
+    process.env.private_key,
+    ['https://www.googleapis.com/auth/firebase.messaging'], // Scope required for FCM
+    null
+  );
+
+  try {
+    const tokens = await jwtClient.authorize();
+    // console.log("this  :"+tokens.access_token)
+    return tokens.access_token;
+  } catch (err) {
+    res.json({error:err});
+    console.error('Error fetching access token:', err);
+    return null;
+  }
+}
+app.post('/send-notification', async (req, res) => {
+    try {
+      // Get OAuth 2.0 access token
+      const accessToken = await getAccessToken();
+  
+      // Construct the message payload
+    //   console.log("sdsdsd",req.body.token);
+
+      const message = {
+        message: {
+          token: req.body.token, // Device registration token
+          notification: {
+            title: req.body.title,
+            body: req.body.body,
+          },
+        },
       };
   
-      // Send notification using Firebase Admin SDK
-      const response = await admin.messaging().sendMulticast(message);
-      console.log('Notification sent successfully:', response);
-      res.status(200).json({ message: 'Notification sent successfully' });
+      // Send request to FCM API
+      const response = await axios.post(
+        `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+        message,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+      // Return response from FCM API
+      res.json(response.data);
     } catch (error) {
-      console.error('Error sending notification:', error);
+      console.error('Error sending notification:', error.response ? error.response.data : error.message);
       res.status(500).json({ error: 'Failed to send notification' });
     }
   });
   
-// let initialNotesLength = 1;
-
-// // Function to send notification
-// const sendNotification = async (message) => {
-//   try {
-//     const accessToken = await getAccessToken();
-
-//     const notification = {
-//       title: 'New announcement !',
-//       body: message,
-//     };
-
-//     const payload = {
-//       message: {
-//         token: 'c8Sg1k04RaqdHJnMISfo0n:APA91bEz8c2p2MbsOA43S2KPWaA66yd_dz9qywYh-ApslW0uzKYZyCykjMwe1mKf8KimlDSzX_-IkKkxbf-89kATVXj5A81_IDdiGGLKVJRmd5vZLdpBaLMTpbwEd_kK5dyWvqTyhFyX', // Replace with actual device token or logic to fetch it
-//         notification: notification,
-//       },
-//     };
-
-//     const response = await axios.post(
-//       `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-//       payload,
-//       {
-//         headers: {
-//           Authorization: `Bearer ${accessToken}`,
-//           'Content-Type': 'application/json',
-//         },
-//       }
-//     );
-
-//     // console.log('Notification sent:', response.data);
-//   } catch (error) {
-//     console.error('Error sending notification:', error.response ? error.response.data : error.message);
-//   }
-// };
-
-// // Monitor 'notes' collection for changes
-// const startMonitoringNotesCollection = async () => {
-//   try {
-//     const notesRef = firestore.collection('notes');
-
-//     // Initial snapshot to get the current length
-//     const initialSnapshot = await notesRef.get();
-//     initialNotesLength = initialSnapshot.size;
-
-//     // Watch for changes in 'notes' collection
-//     notesRef.onSnapshot(snapshot => {
-//       const currentLength = snapshot.size;
-
-//       // Check if new data was added (assuming initialNotesLength = 1)
-//       if (currentLength > initialNotesLength) {
-//         // Get the latest added document
-//         const addedDoc = snapshot.docChanges().find(change => change.type === 'added');
-//         if (addedDoc) {
-//           const addedData = addedDoc.doc.data();
-//           const message = `New announcement added do check: ${addedData.note}`; // Customize this message based on your document structure
-//           sendNotification(message);
-//         }
-//       }
-
-//       // Update initialNotesLength to current length for future comparisons
-//       initialNotesLength = currentLength;
-//     });
-//   } catch (error) {
-//     res.json({ error: error})
-//     // console.error('Error monitoring notes collection:', error);
-//   }
-// };
-
-// // Call function to start monitoring 'notes' collection
-// startMonitoringNotesCollection();
-
-// // Endpoint to fetch 'notes' collection length
-// app.get('/notes', async (req, res) => {
-//   try {
-//     const notesRef = firestore.collection('notes');
-//     const snapshot = await notesRef.get();
-//     const notesLength = snapshot.size;
-//     res.json({ notesLength: notesLength });
-//   } catch (error) {
-//     console.error('Error fetching notes collection:', error);
-//     res.status(500).json({ error: 'Failed to fetch notes collection' });
-//   }
+// app.get("/", (req, res) => {
+//     console.log("hello")
+// res.json({messafe:"hello"})
+// console.log("hello")
 // });
-
-
-// export const  getAccessToken=async()=> {
-//   const jwtClient = new google.auth.JWT(
-//     process.env.client_email,
-//     null,
-//     process.env.private_key,
-//     ['https://www.googleapis.com/auth/firebase.messaging'], // Scope required for FCM
-//     null
-//   );
-
-//   try {
-//     const tokens = await jwtClient.authorize();
-//     // console.log("this  :"+tokens.access_token)
-//     return tokens.access_token;
-//   } catch (err) {
-//     res.json({error:err});
-//     // console.error('Error fetching access token:', err);
-//     return null;
-//   }
-// }
-// app.post('/send-notification', async (req, res) => {
-//     try {
-//       // Get OAuth 2.0 access token
-//       const accessToken = await getAccessToken();
-  
-//       // Construct the message payload
-//     //   console.log("sdsdsd",req.body.token);
-
-//       const message = {
-//         message: {
-//           token: req.body.token, // Device registration token
-//           notification: {
-//             title: req.body.title,
-//             body: req.body.body,
-//           },
-//         },
-//       };
-  
-//       // Send request to FCM API
-//       const response = await axios.post(
-//         `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-//         message,
-//         {
-//           headers: {
-//             Authorization: `Bearer ${accessToken}`,
-//             'Content-Type': 'application/json',
-//           },
-//         }
-//       );
-  
-//       // Return response from FCM API
-//       res.json(response.data);
-//     } catch (error) {
-//     //   console.error('Error sending notification:', error.response ? error.response.data : error.message);
-//       res.status(500).json({ error: 'Failed to send notification' });
-//     }
-//   });
-  
-// // app.get("/", (req, res) => {
-// //     console.log("hello")
-// // res.json({messafe:"hello"})
-// // console.log("hello")
-// // });
 app.get('/', (req, res) => {
     console.log('Received GET request at /');
 
     res.json({ message: 'Server is running' });
   })
-//   // checking port on local server
+  // checking port on local server
   app.listen(PORT, () => {
     console.log(`listening on ${PORT}`);
   });
