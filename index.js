@@ -76,7 +76,7 @@ const sendNotification = async (message) => {
       }
     );
 
-    console.log('Notification sent:', response.data);
+    // console.log('Notification sent:', response.data);
   } catch (error) {
     console.error('Error sending notification:', error.response ? error.response.data : error.message);
   }
@@ -110,7 +110,8 @@ const startMonitoringNotesCollection = async () => {
       initialNotesLength = currentLength;
     });
   } catch (error) {
-    console.error('Error monitoring notes collection:', error);
+    res.json({ error: error})
+    // console.error('Error monitoring notes collection:', error);
   }
 };
 
@@ -145,7 +146,8 @@ export const  getAccessToken=async()=> {
     // console.log("this  :"+tokens.access_token)
     return tokens.access_token;
   } catch (err) {
-    console.error('Error fetching access token:', err);
+    res.json({error:err});
+    // console.error('Error fetching access token:', err);
     return null;
   }
 }
@@ -182,7 +184,7 @@ app.post('/send-notification', async (req, res) => {
       // Return response from FCM API
       res.json(response.data);
     } catch (error) {
-      console.error('Error sending notification:', error.response ? error.response.data : error.message);
+    //   console.error('Error sending notification:', error.response ? error.response.data : error.message);
       res.status(500).json({ error: 'Failed to send notification' });
     }
   });
