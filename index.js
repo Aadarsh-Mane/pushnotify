@@ -11,6 +11,8 @@ const PORT = process.env.PORT || 5000;
 const app = express();
 app.use(express.json()); // Parse JSON-encoded bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
+const tokens = [];
+const tokenspecific = [];
 
 admin.initializeApp({
     credential: admin.credential.cert({
@@ -52,19 +54,24 @@ let initialNotesLength = 1;
 const sendNotification = async (message) => {
   try {
     const accessToken = await getAccessToken();
+    const querySnapshot = await firestore.collection('fcmtokens').get();
+    querySnapshot.forEach(doc => {
+      tokenspecific.push(doc.data().token);
+    });
 
     const notification = {
       title: 'New announcement !',
       body: message,
     };
+    for (let i = 0; i < tokenspecific.length; i++) {
 
     const payload = {
       message: {
-        token: 'c8Sg1k04RaqdHJnMISfo0n:APA91bEz8c2p2MbsOA43S2KPWaA66yd_dz9qywYh-ApslW0uzKYZyCykjMwe1mKf8KimlDSzX_-IkKkxbf-89kATVXj5A81_IDdiGGLKVJRmd5vZLdpBaLMTpbwEd_kK5dyWvqTyhFyX', // Replace with actual device token or logic to fetch it
-        notification: notification,
-      },
+        token: tokenspecific[i],
+                notification: notification,
+      }
     };
-
+    
     const response = await axios.post(
       `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
       payload,
@@ -77,6 +84,7 @@ const sendNotification = async (message) => {
     );
 
     // console.log('Notification sent:', response.data);
+  }
   } catch (error) {
     console.error('Error sending notification:', error.response ? error.response.data : error.message);
   }
@@ -151,6 +159,52 @@ export const  getAccessToken=async()=> {
     return null;
   }
 }
+app.post('/send-notification-all', async (req, res) => {
+  try {
+    const accessToken = await getAccessToken();
+
+    // Retrieve all FCM tokens from Firestore
+    const querySnapshot = await firestore.collection('fcmtokens').get();
+    querySnapshot.forEach(doc => {
+      tokens.push(doc.data().token);
+    });
+
+    // Iterate through each token and send notification
+    for (let i = 0; i < tokens.length; i++) {
+      const message = {
+        message: {
+          token: tokens[i], // Use the current token in the iteration
+          notification: {
+            title: req.body.title,
+            body: req.body.body,
+          },
+        },
+      };
+
+      // Send request to FCM API for current token
+      const response = await axios.post(
+        `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+        message,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      // Log success response or handle as needed
+      console.log(`Notification sent to token ${tokens[i]}`);
+    }
+
+    // Return success message if needed
+    res.json({ message: 'Notifications sent successfully to all devices' });
+  } catch (error) {
+    console.error('Error sending notification to all devices:', error.response ? error.response.data : error.message);
+    res.status(500).json({ error: 'Failed to send notification' });
+  }
+});
+
 app.post('/send-notification', async (req, res) => {
     try {
       // Get OAuth 2.0 access token
