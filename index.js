@@ -48,83 +48,93 @@ admin.initializeApp({
 //     }
 //   });
   // Variable to store the initial length of the 'notes' collection
-let initialNotesLength = 1;
-
-// Function to send notification
-const sendNotification = async (message) => {
-  try {
-    const accessToken = await getAccessToken();
-    const querySnapshot = await firestore.collection('fcmtokens').get();
-    querySnapshot.forEach(doc => {
-      tokenspecific.push(doc.data().token);
-    });
-
-    const notification = {
-      title: 'New announcement !',
-      body: message,
-    };
-    for (let i = 0; i < tokenspecific.length; i++) {
-
-    const payload = {
-      message: {
-        token: tokenspecific[i],
-                notification: notification,
+  let initialNotesLength = 1;
+  let lastSentNotification = null; // To track the last sent notification
+  
+  // Function to send notification
+  const sendNotification = async (message) => {
+    try {
+      const accessToken = await getAccessToken();
+      const querySnapshot = await firestore.collection('fcmtokens').get();
+      const tokenspecific = [];
+  
+      querySnapshot.forEach(doc => {
+        tokenspecific.push(doc.data().token);
+      });
+  
+      const notification = {
+        title: 'New announcement!',
+        body: message,
+      };
+  
+      // Send notification to each token
+      for (let i = 0; i < tokenspecific.length; i++) {
+        const payload = {
+          message: {
+            token: tokenspecific[i],
+            notification: notification,
+          }
+        };
+  
+        await axios.post(
+          `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+          payload,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+  
+        console.log(`Notification sent  jbjto token ${tokenspecific[i]}`);
       }
-    };
-    
-    const response = await axios.post(
-      `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-      payload,
-      {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
-
-    // console.log('Notification sent:', response.data);
-  }
-  } catch (error) {
-    console.error('Error sending notification:', error.response ? error.response.data : error.message);
-  }
-};
-
-// Monitor 'notes' collection for changes
-const startMonitoringNotesCollection = async () => {
-  try {
-    const notesRef = firestore.collection('notes');
-
-    // Initial snapshot to get the current length
-    const initialSnapshot = await notesRef.get();
-    initialNotesLength = initialSnapshot.size;
-
-    // Watch for changes in 'notes' collection
-    notesRef.onSnapshot(snapshot => {
-      const currentLength = snapshot.size;
-
-      // Check if new data was added (assuming initialNotesLength = 1)
-      if (currentLength > initialNotesLength) {
-        // Get the latest added document
-        const addedDoc = snapshot.docChanges().find(change => change.type === 'added');
-        if (addedDoc) {
-          const addedData = addedDoc.doc.data();
-          const message = `New announcement added do check: ${addedData.note}`; // Customize this message based on your document structure
-          sendNotification(message);
+    } catch (error) {
+      console.error('Error sending notification:', error.response ? error.response.data : error.message);
+    }
+  };
+  
+  // Monitor 'notes' collection for changes
+  const startMonitoringNotesCollection = async () => {
+    try {
+      const notesRef = firestore.collection('notes');
+  
+      // Initial snapshot to get the current length
+      const initialSnapshot = await notesRef.get();
+      initialNotesLength = initialSnapshot.size;
+  
+      // Watch for changes in 'notes' collection
+      notesRef.onSnapshot(snapshot => {
+        const currentLength = snapshot.size;
+  
+        // Check if new data was added
+        if (currentLength > initialNotesLength) {
+          // Iterate through document changes
+          snapshot.docChanges().forEach(change => {
+            if (change.type === 'added') {
+              const addedData = change.doc.data();
+              const message = `New announcement added: ${addedData.note}`; // Customize this message based on your document structure
+       
+              // Check if this notification has already been sent
+              if (lastSentNotification !== message) {
+                sendNotification(message);
+                lastSentNotification = message; // Update last sent notification
+              }
+            }
+          });
         }
-      }
-
-      // Update initialNotesLength to current length for future comparisons
-      initialNotesLength = currentLength;
-    });
-  } catch (error) {
-    res.json({ error: error})
-    // console.error('Error monitoring notes collection:', error);
-  }
-};
-
-// Call function to start monitoring 'notes' collection
-startMonitoringNotesCollection();
+  
+        // Update initialNotesLength to current length for future comparisons
+        initialNotesLength = currentLength;
+      });
+    } catch (error) {
+      console.error('Error monitoring notes collection:', error);
+    }
+  };
+  
+  // Call function to start monitoring 'notes' collection
+  startMonitoringNotesCollection();
+  
 
 // Endpoint to fetch 'notes' collection length
 app.get('/notes', async (req, res) => {
