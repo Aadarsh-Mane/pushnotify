@@ -27,26 +27,26 @@ admin.initializeApp({
   });
   
   const firestore = admin.firestore();
-//   app.get('/collections', async (req, res) => {
-//     try {
-//       const collections = await firestore.listCollections();
-//       const collectionIds = collections.map((col) => col.id);
-//       const collectionLengths = await Promise.all(
-//         collectionIds.map(async (id) => {
-//           const snapshot = await firestore.collection(id).get();
-//           return snapshot.size;
-//         })
-//       );
-//       const collectionInfo = collectionIds.map((id, index) => ({
-//         id: id,
-//         length: collectionLengths[index],
-//       }));
-//       res.json({ collections: collectionInfo });
-//     } catch (error) {
-//       console.error('Error fetching collections:', error);
-//       res.status(500).json({ error: 'Failed to fetch collections' });
-//     }
-//   });
+  app.get('/collections', async (req, res) => {
+    try {
+      const collections = await firestore.listCollections();
+      const collectionIds = collections.map((col) => col.id);
+      const collectionLengths = await Promise.all(
+        collectionIds.map(async (id) => {
+          const snapshot = await firestore.collection(id).get();
+          return snapshot.size;
+        })
+      );
+      const collectionInfo = collectionIds.map((id, index) => ({
+        id: id,
+        length: collectionLengths[index],
+      }));
+      res.json({ collections: collectionInfo });
+    } catch (error) {
+      console.error('Error fetching collections:', error);
+      res.status(500).json({ error: 'Failed to fetch collections' });
+    }
+  });
   // Variable to store the initial length of the 'notes' collection
   let initialNotesLength = 1;
   let lastSentNotification = null; // To track the last sent notification
