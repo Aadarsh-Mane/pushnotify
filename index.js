@@ -58,8 +58,9 @@ admin.initializeApp({
       const querySnapshot = await firestore.collection('fcmtokens').get();
       const tokenspecific = [];
   
+      // Collect tokens and their document IDs
       querySnapshot.forEach(doc => {
-        tokenspecific.push(doc.data().token);
+        tokenspecific.push({ id: doc.id, token: doc.data().token });
       });
   
       const notification = {
@@ -67,30 +68,58 @@ admin.initializeApp({
         body: message,
       };
   
+      // Counters for tracking results
+      let successfulNotifications = 0;
+      let invalidTokens = 0;
+  
       // Send notification to each token
       for (let i = 0; i < tokenspecific.length; i++) {
         const payload = {
           message: {
-            token: tokenspecific[i],
+            token: tokenspecific[i].token,
             notification: notification,
           }
         };
   
-        await axios.post(
-          `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-          payload,
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
+        try {
+          // Attempt to send the notification
+          await axios.post(
+            `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+            payload,
+            {
+              headers: {
+                Authorization: `Bearer ${accessToken}`,
+                'Content-Type': 'application/json',
+              },
+            }
+          );
   
-        console.log(`Notification sent  jbjto token ${tokenspecific[i]}`);
+          console.log(`Notification sent to token ${tokenspecific[i].token}`);
+          successfulNotifications++;
+  
+        } catch (error) {
+          console.error(`Error sending to token ${tokenspecific[i].token}:`, error.response ? error.response.data : error.message);
+  
+          // Handle invalid tokens
+          if (error.response && error.response.data.error) {
+            const errorCode = error.response.data.error.code;
+            const errorMessage = error.response.data.error.message;
+  
+            // Detect invalid tokens
+            if (errorCode === 404 || errorMessage.includes('registration token is not a valid FCM registration token') || errorMessage.includes('not registered')) {
+              // Remove invalid token from Firestore
+              await firestore.collection('fcmtokens').doc(tokenspecific[i].id).delete();
+              console.log(`Removed invalid token ${tokenspecific[i].token}`);
+              invalidTokens++;
+            }
+          }
+        }
       }
+  
+      console.log(`Notifications sent successfully: ${successfulNotifications}`);
+      console.log(`Invalid tokens removed: ${invalidTokens}`);
     } catch (error) {
-      console.error('Error sending notification:', error.response ? error.response.data : error.message);
+      console.error('Error sending notifications:', error.response ? error.response.data : error.message);
     }
   };
   
@@ -114,7 +143,7 @@ admin.initializeApp({
             if (change.type === 'added') {
               const addedData = change.doc.data();
               const message = `New announcement added: ${addedData.note}`; // Customize this message based on your document structure
-       
+              
               // Check if this notification has already been sent
               if (lastSentNotification !== message) {
                 sendNotification(message);
@@ -134,6 +163,7 @@ admin.initializeApp({
   
   // Call function to start monitoring 'notes' collection
   startMonitoringNotesCollection();
+  
   
 
 // Endpoint to fetch 'notes' collection length
@@ -175,15 +205,20 @@ app.post('/send-notification-all', async (req, res) => {
 
     // Retrieve all FCM tokens from Firestore
     const querySnapshot = await firestore.collection('fcmtokens').get();
+    const tokens = [];
     querySnapshot.forEach(doc => {
-      tokens.push(doc.data().token);
+      tokens.push({ id: doc.id, token: doc.data().token });
     });
+
+    // Initialize counters for sent and invalid tokens
+    let successfulNotifications = 0;
+    let invalidTokens = 0;
 
     // Iterate through each token and send notification
     for (let i = 0; i < tokens.length; i++) {
       const message = {
         message: {
-          token: tokens[i], // Use the current token in the iteration
+          token: tokens[i].token, // Use the current token in the iteration
           notification: {
             title: req.body.title,
             body: req.body.body,
@@ -191,68 +226,46 @@ app.post('/send-notification-all', async (req, res) => {
         },
       };
 
-      // Send request to FCM API for current token
-      const response = await axios.post(
-        `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-        message,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      try {
+        // Send request to FCM API for current token
+        const response = await axios.post(
+          `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
+          message,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
 
-      // Log success response or handle as needed
-      console.log(`Notification sent to token ${tokens[i]}`);
+        console.log(`Notification sent to token ${tokens[i].token}`);
+        successfulNotifications++;
+      } catch (error) {
+        console.error(`Error sending to token ${tokens[i].token}:`, error.response ? error.response.data : error.message);
+
+        // Check if the error indicates the token is invalid
+        if (error.response && (error.response.data.error.code === 404 || error.response.data.error.message.includes('registration token is not a valid FCM registration token'))) {
+          // Remove invalid token from Firestore
+          await firestore.collection('fcmtokens').doc(tokens[i].id).delete();
+          console.log(`Removed invalid token ${tokens[i].token}`);
+          invalidTokens++;
+        }
+      }
     }
 
-    // Return success message if needed
-    res.json({ message: 'Notifications sent successfully to all devices' });
+    // Return summary of the notification sending process
+    res.json({
+      message: 'Notification process completed',
+      successfulNotifications: successfulNotifications,
+      invalidTokens: invalidTokens,
+    });
   } catch (error) {
-    console.error('Error sending notification to all devices:', error.response ? error.response.data : error.message);
-    res.status(500).json({ error: 'Failed to send notification' });
+    console.error('Error sending notifications to all devices:', error.response ? error.response.data : error.message);
+    res.status(500).json({ error: 'Failed to send notifications' });
   }
 });
 
-app.post('/send-notification', async (req, res) => {
-    try {
-      // Get OAuth 2.0 access token
-      const accessToken = await getAccessToken();
-  
-      // Construct the message payload
-    //   console.log("sdsdsd",req.body.token);
-
-      const message = {
-        message: {
-          token: req.body.token, // Device registration token
-          notification: {
-            title: req.body.title,
-            body: req.body.body,
-          },
-        },
-      };
-  
-      // Send request to FCM API
-      const response = await axios.post(
-        `https://fcm.googleapis.com/v1/projects/myschool-44d2f/messages:send`,
-        message,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-  
-      // Return response from FCM API
-      res.json(response.data);
-    } catch (error) {
-      console.error('Error sending notification:', error.response ? error.response.data : error.message);
-      res.status(500).json({ error: 'Failed to send notification' });
-    }
-  });
-  
 // app.get("/", (req, res) => {
 //     console.log("hello")
 // res.json({messafe:"hello"})
